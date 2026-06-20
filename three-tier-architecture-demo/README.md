@@ -1,451 +1,128 @@
-# 🤖 Stan's Robot Shop — E-Commerce on AKS
+# Three Tier Architecture Deployment on AWS EKS
 
-> Deploy a **full e-commerce microservices application** onto **Azure Kubernetes Service (AKS)** using Helm charts, StatefulSets, Persistent Volumes, and an Ingress controller. Based on the [Instana Robot Shop](https://github.com/instana/robot-shop) project by IBM.
+Stan's Robot Shop is a sample microservice application you can use as a sandbox to test and learn containerised application orchestration and monitoring techniques. It is not intended to be a comprehensive reference example of how to write a microservices application, although you will better understand some of those concepts by playing with Stan's Robot Shop. To be clear, the error handling is patchy and there is not any security built into the application.
 
----
+You can get more detailed information from my [blog post](https://www.instana.com/blog/stans-robot-shop-sample-microservice-application/) about this sample microservice application.
 
-## 📋 Table of Contents
+This sample microservice application has been built using these technologies:
+- NodeJS ([Express](http://expressjs.com/))
+- Java ([Spring Boot](https://spring.io/))
+- Python ([Flask](http://flask.pocoo.org))
+- Golang
+- PHP (Apache)
+- MongoDB
+- Redis
+- MySQL ([Maxmind](http://www.maxmind.com) data)
+- RabbitMQ
+- Nginx
+- AngularJS (1.x)
 
-- [🗺️ Project Overview](#️-project-overview)
-- [🧩 Microservices Architecture](#-microservices-architecture)
-- [🗄️ Databases & Storage](#️-databases--storage)
-- [🛒 Application Workflow](#-application-workflow)
-- [✅ Prerequisites](#-prerequisites)
-- [☁️ Step 1 — Create an AKS Cluster](#️-step-1--create-an-aks-cluster)
-- [🔌 Step 2 — Connect to the Cluster](#-step-2--connect-to-the-cluster)
-- [📦 Step 3 — Clone the Repository](#-step-3--clone-the-repository)
-- [⛵ Step 4 — Deploy with Helm](#-step-4--deploy-with-helm)
-- [🔍 Step 5 — Verify the Deployment](#-step-5--verify-the-deployment)
-- [🌐 Step 6 — Configure Ingress](#-step-6--configure-ingress)
-- [💾 Understanding Persistent Volumes](#-understanding-persistent-volumes)
-- [⛵ Understanding Helm Charts](#-understanding-helm-charts)
-- [🐳 Containerisation by Language](#-containerisation-by-language)
-- [🛠️ Troubleshooting](#️-troubleshooting)
-- [🔗 Resources](#-resources)
+The various services in the sample application already include all required Instana components installed and configured. The Instana components provide automatic instrumentation for complete end to end [tracing](https://docs.instana.io/core_concepts/tracing/), as well as complete visibility into time series metrics for all the technologies.
 
----
+To see the application performance results in the Instana dashboard, you will first need an Instana account. Don't worry a [trial account](https://instana.com/trial?utm_source=github&utm_medium=robot_shop) is free.
 
-## 🗺️ Project Overview
+## Build from Source
+To optionally build from source (you will need a newish version of Docker to do this) use Docker Compose. Optionally edit the `.env` file to specify an alternative image registry and version tag; see the official [documentation](https://docs.docker.com/compose/env-file/) for more information.
 
-This project deploys **Stan's Robot Shop** — a realistic, minimalist e-commerce application — onto an AKS cluster. It is purpose-built as a learning tool, with each microservice written in a **different programming language** so you gain hands-on experience with containerising diverse tech stacks.
+To download the tracing module for Nginx, it needs a valid Instana agent key. Set this in the environment before starting the build.
 
-### 🌟 Steps
-
-- Deploying **multi-microservice apps** on AKS
-- Working with **Deployments** and **StatefulSets**
-- Configuring **Persistent Volumes** and **Storage Classes**
-- Using **Helm charts** for environment-aware deployments
-- Setting up an **Application Gateway Ingress Controller**
-
----
-
-## 🧩 Microservices Architecture
-
-```
-🌍 User (Browser)
-      │
-      ▼
- 🌐 Web (Nginx)          ← Front-end UI
-      │
-      ├──▶ 👤 User        ← Registration & login        → 🍃 MongoDB
-      ├──▶ 📂 Catalogue   ← Product listings & images   → 🐬 MySQL
-      ├──▶ 🛒 Cart        ← Shopping cart state         → ⚡ Redis
-      ├──▶ ⭐ Ratings     ← Product ratings              → ⚡ Redis
-      ├──▶ 🚚 Shipping    ← Shipping cost calculator
-      ├──▶ 💳 Payment     ← Payment processing
-      └──▶ 📦 Dispatch    ← Order dispatch notifications
+```shell
+$ export INSTANA_AGENT_KEY="<your agent key>"
 ```
 
-### 📋 Service Summary
+Now build all the images.
 
-| Service        | Language | Role                          | Storage |
-| -------------- | -------- | ----------------------------- | ------- |
-| `web` 🌐       | Nginx    | Front-end UI server           | —       |
-| `user` 👤      | —        | Registration & authentication | MongoDB |
-| `catalogue` 📂 | Node.js  | Product listings & categories | MySQL   |
-| `cart` 🛒      | Node.js  | Shopping cart management      | Redis   |
-| `ratings` ⭐   | PHP      | Product ratings               | Redis   |
-| `shipping` 🚚  | Java     | Shipping cost calculation     | —       |
-| `payment` 💳   | Python   | Payment processing            | —       |
-| `dispatch` 📦  | Go       | Order dispatch notifications  | —       |
-
----
-
-## 🗄️ Databases & Storage
-
-| Component      | Type            | Purpose                          |
-| -------------- | --------------- | -------------------------------- |
-| 🐬 **MySQL**   | Relational DB   | Product images, catalogue data   |
-| 🍃 **MongoDB** | NoSQL DB        | User accounts, unstructured data |
-| ⚡ **Redis**   | In-memory store | Ratings cache, cart session data |
-
-### 💡 Why Redis for Ratings?
-
-> Ratings are **highly dynamic** — thousands of users can rate a product within minutes. An in-memory store like Redis retrieves this data far faster than a traditional database, avoiding latency under heavy read loads.
-
-Redis is deployed as a **StatefulSet** connected to a **Persistent Volume** so ratings survive pod restarts.
-
----
-
-## 🛒 Application Workflow
-
-```
-1. 📝 Register / Log in
-2. 🔍 Browse categories (AI, Robots)
-3. 🤖 Select a robot → view details & ratings
-4. ⭐ Rate the product
-5. 🛒 Add to cart (quantity selectable)
-6. 🚚 Calculate shipping by region
-7. 💳 Confirm & pay
-8. 📦 Receive dispatch confirmation
+```shell
+$ docker-compose build
 ```
 
----
+If you modified the `.env` file and changed the image registry, you need to push the images to that registry
 
-## ✅ Prerequisites
-
-- 🔷 **Azure CLI** installed and authenticated
-- ☸️ **kubectl** installed
-- ⛵ **Helm** installed (`v3+`)
-- 📁 This repository cloned locally
-- 🆓 Azure subscription (free tier works, watch regional quotas)
-
----
-
-## ☁️ Step 1 — Create an AKS Cluster
-
-1. In the Azure Portal, search for **Kubernetes services** → **Create**.
-2. Create a new **Resource Group** (e.g. `ecommerce-demo`).
-3. Recommended settings:
-
-   | Setting            | Value                                      |
-   | ------------------ | ------------------------------------------ |
-   | Cluster preset     | Dev/Test                                   |
-   | Cluster name       | `three-tier`                               |
-   | Region             | West US 2 _(change if quota issues arise)_ |
-   | Availability zones | Zone 1                                     |
-   | AKS pricing tier   | Free                                       |
-   | Scale method       | Manual or Autoscale (min 1, max 2)         |
-
-4. Click **Review + Create** → **Create**. ⏳ Allow 10–15 minutes.
-
-> ⚠️ **Quota errors?** Switch to a different region — this is the most common fix on free subscriptions.
-
----
-
-## 🔌 Step 2 — Connect to the Cluster
-
-```bash
-# Pull kubeconfig and merge into local config
-az aks get-credentials \
-  --resource-group ecommerce-demo \
-  --name three-tier
-
-# ✅ Verify you're connected to the right cluster
-kubectl config current-context
-# Expected output: three-tier
-
-kubectl get pods
-# Should return "No resources found" (cluster is empty)
+```shell
+$ docker-compose push
 ```
 
----
+## Run Locally
+You can run it locally for testing.
 
-## 📦 Step 3 — Clone the Repository
+If you did not build from source, don't worry all the images are on Docker Hub. Just pull down those images first using:
 
-```bash
-git clone <REPO_URL>
-cd three-tier-architecture-demo
-
-# Navigate to the AKS Helm chart directory
-cd AKS/helm
+```shell
+$ docker-compose pull
 ```
 
----
+Fire up Stan's Robot Shop with:
 
-## ⛵ Step 4 — Deploy with Helm
-
-```bash
-# 1️⃣ Create a dedicated namespace
-kubectl create namespace robot-shop
-
-# 2️⃣ Install the Helm chart into that namespace
-helm install robot-shop . --namespace robot-shop
+```shell
+$ docker-compose up
 ```
 
-> ⏳ Pod creation takes a couple of minutes. Redis and the databases spin up first; application services follow.
+If you want to fire up some load as well:
 
----
-
-## 🔍 Step 5 — Verify the Deployment
-
-```bash
-# Watch all pods come up in the robot-shop namespace
-kubectl get pods -n robot-shop
-
-# Check services (note the web service external IP / NodePort)
-kubectl get svc -n robot-shop
-
-# Inspect the Redis StatefulSet's Persistent Volume Claim
-kubectl get pvc -n robot-shop
+```shell
+$ docker-compose -f docker-compose.yaml -f docker-compose-load.yaml up
 ```
 
-**Expected pod states — all should be `Running` ✅:**
+If you are running it locally on a Linux host you can also run the Instana [agent](https://docs.instana.io/quick_start/agent_setup/container/docker/) locally, unfortunately the agent is currently not supported on Mac.
 
-```
-NAME              READY   STATUS    RESTARTS
-cart-xxx          1/1     Running   0
-catalogue-xxx     1/1     Running   0
-dispatch-xxx      1/1     Running   0
-mongodb-0         1/1     Running   0
-mysql-0           1/1     Running   0
-payment-xxx       1/1     Running   0
-rabbitmq-0        1/1     Running   0
-ratings-xxx       1/1     Running   0
-redis-0           1/1     Running   0
-shipping-xxx      1/1     Running   0
-user-xxx          1/1     Running   0
-web-xxx           1/1     Running   0
-```
+There is also only limited support on ARM architectures at the moment.
 
----
+## Marathon / DCOS
 
-## 🌐 Step 6 — Configure Ingress
+The manifests for robotshop are in the *DCOS/* directory. These manifests were built using a fresh install of DCOS 1.11.0. They should work on a vanilla HA or single instance install.
 
-### Enable the Application Gateway Ingress Controller
+You may install Instana via the DCOS package manager, instructions are here: https://github.com/dcos/examples/tree/master/instana-agent/1.9
 
-1. In the Azure Portal, go to your **AKS cluster**.
-2. Click **Networking** in the left menu.
-3. ✅ Check **Enable Ingress controller** (Application Gateway).
-4. Click **Apply** — allow 5–10 minutes.
+## Kubernetes
+You can run Kubernetes locally using [minikube](https://github.com/kubernetes/minikube) or on one of the many cloud providers.
 
-### Apply the Ingress Resource
+The Docker container images are all available on [Docker Hub](https://hub.docker.com/u/robotshop/).
 
-```bash
-kubectl apply -f ingress.yaml -n robot-shop
+Install Stan's Robot Shop to your Kubernetes cluster using the [Helm](K8s/helm/README.md) chart.
+
+To deploy the Instana agent to Kubernetes, just use the [helm](https://github.com/instana/helm-charts) chart.
+
+## Accessing the Store
+If you are running the store locally via *docker-compose up* then, the store front is available on localhost port 8080 [http://localhost:8080](http://localhost:8080/)
+
+If you are running the store on Kubernetes via minikube then, find the IP address of Minikube and the Node Port of the web service.
+
+```shell
+$ minikube ip
+$ kubectl get svc web
 ```
 
-**`ingress.yaml`:**
+If you are using a cloud Kubernetes / Openshift / Mesosphere then it will be available on the load balancer of that system.
 
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: robot-shop-ingress
-  namespace: robot-shop
-spec:
-  ingressClassName: azure-application-gateway # 🏷️ ties this to the AGIC
-  rules:
-    - http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: web # 🌐 front-end service
-                port:
-                  number: 8080
+## Load Generation
+A separate load generation utility is provided in the `load-gen` directory. This is not automatically run when the application is started. The load generator is built with Python and [Locust](https://locust.io). The `build.sh` script builds the Docker image, optionally taking *push* as the first argument to also push the image to the registry. The registry and tag settings are loaded from the `.env` file in the parent directory. The script `load-gen.sh` runs the image, it takes a number of command line arguments. You could run the container inside an orchestration system (K8s) as well if you want to, an example descriptor is provided in K8s directory. For End-user Monitoring ,load is not automatically generated but by navigating through the Robotshop from the browser .For more details see the [README](load-gen/README.md) in the load-gen directory.  
+
+## Website Monitoring / End-User Monitoring
+
+### Docker Compose
+
+To enable Website Monioring / End-User Monitoring (EUM) see the official [documentation](https://docs.instana.io/website_monitoring/) for how to create a configuration. There is no need to inject the JavaScript fragment into the page, this will be handled automatically. Just make a note of the unique key and set the environment variable `INSTANA_EUM_KEY` and `INSTANA_EUM_REPORTING_URL` for the web image within `docker-compose.yaml`.
+
+### Kubernetes
+
+The Helm chart for installing Stan's Robot Shop supports setting the key and endpoint url required for website monitoring, see the [README](K8s/helm/README.md).
+
+## Prometheus
+
+The cart and payment services both have Prometheus metric endpoints. These are accessible on `/metrics`. The cart service provides:
+
+* Counter of the number of items added to the cart
+
+The payment services provides:
+
+* Counter of the number of items perchased
+* Histogram of the total number of items in each cart
+* Histogram of the total value of each cart
+
+To test the metrics use:
+
+```shell
+$ curl http://<host>:8080/api/cart/metrics
+$ curl http://<host>:8080/api/payment/metrics
 ```
 
-### Verify the Ingress Address
-
-```bash
-kubectl get ingress -n robot-shop
-# Wait until ADDRESS column is populated, then open it in your browser 🌍
-```
-
-> 💡 **Why use Ingress instead of a LoadBalancer service?**
->
-> | LoadBalancer Service      | Ingress Controller                   |
-> | ------------------------- | ------------------------------------ |
-> | One public IP per service | One public IP for all services       |
-> | No routing rules          | Path-based & host-based routing      |
-> | No WAF                    | Web Application Firewall support     |
-> | Limited features          | TLS termination, rewrites, redirects |
-
-### 🏷️ Ingress Class Names — Why They Matter
-
-If multiple teams share a cluster using **different Ingress controllers** (e.g. one team uses NGINX, another uses Azure Application Gateway), the `ingressClassName` field tells each controller which Ingress resources it should manage — preventing conflicts.
-
----
-
-## 💾 Understanding Persistent Volumes
-
-Redis and the databases use **StatefulSets** with **Persistent Volume Claims (PVCs)** to survive pod restarts.
-
-```yaml
-# Excerpt from redis-statefulset.yaml
-volumeClaimTemplates:
-  - metadata:
-      name: data
-    spec:
-      accessModes: ["ReadWriteOnce"]
-      storageClassName: default # 🗄️ Azure Managed Disk
-      resources:
-        requests:
-          storage: 1Gi
-```
-
-### 📦 Azure Storage Classes
-
-```bash
-kubectl get storageclass
-```
-
-| Storage Class     | Azure Equivalent   | Best For                                                   |
-| ----------------- | ------------------ | ---------------------------------------------------------- |
-| `default`         | Azure Managed Disk | **Single pod** access (like EBS on AWS)                    |
-| `azurefile`       | Azure Files        | **Multi-pod / multi-node** shared access (like EFS on AWS) |
-| `managed-premium` | Azure Premium SSD  | High-performance workloads                                 |
-
-> 🔑 **Rule of thumb:**
->
-> - One pod reading/writing → use **Azure Disk** (`default`)
-> - Multiple pods or nodes sharing a volume → use **Azure Files** (`azurefile`)
-
----
-
-## ⛵ Understanding Helm Charts
-
-```
-helm/
-├── Chart.yaml          # 📋 Chart metadata & version
-├── values.yaml         # 🎛️ Dynamic configuration values
-└── templates/          # 📁 All Kubernetes manifest templates
-    ├── web-deployment.yaml
-    ├── cart-deployment.yaml
-    ├── redis-statefulset.yaml
-    ├── mysql-statefulset.yaml
-    └── ... (one file per service)
-```
-
-### 🎛️ How Templating Works
-
-Inside any template file, dynamic values use **Go/Jinja-style** syntax:
-
-```yaml
-# templates/payment-deployment.yaml
-image: {{ .Values.image.repo }}/payment:{{ .Values.image.version }}
-env:
-  - name: PAYMENT_GATEWAY
-    value: {{ .Values.paymentGateway }}
-```
-
-These are resolved from `values.yaml` at install time:
-
-```yaml
-# values.yaml
-image:
-  repo: robotshop
-  version: latest
-paymentGateway: "stripe"
-```
-
-### 🌍 Why Helm over plain YAML?
-
-| Plain kubectl YAML                   | Helm Charts                          |
-| ------------------------------------ | ------------------------------------ |
-| 24 separate files to manage          | All templates in one chart           |
-| Must duplicate files per environment | Change `values.yaml` per environment |
-| Hard to version & rollback           | `helm rollback` in one command       |
-| No parameterisation                  | Full Go templating support           |
-
----
-
-## 🐳 Containerisation by Language
-
-Each microservice has its own `Dockerfile`. Here's the pattern per language:
-
-### 🟢 Node.js (cart, catalogue)
-
-```dockerfile
-FROM node:lts-alpine
-WORKDIR /usr/src/app
-COPY package.json .          # 📦 dependency manifest (like requirements.txt)
-RUN npm install              # install dependencies
-COPY server.js .             # copy source code
-CMD ["node", "server.js"]    # start the app
-```
-
-### 🐍 Python (payment)
-
-```dockerfile
-FROM python:3-slim
-WORKDIR /usr/src/app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-COPY app.py .
-CMD ["python", "app.py"]
-```
-
-### 🔵 Go (dispatch)
-
-```dockerfile
-FROM golang:alpine AS build
-COPY go.mod .
-RUN go mod download
-COPY *.go .
-RUN go build -o dispatch        # compile binary
-
-FROM alpine                     # 🪶 tiny runtime image
-COPY --from=build /dispatch .
-CMD ["/dispatch"]
-```
-
-### ☕ Java (shipping) — Multi-stage Build
-
-```dockerfile
-# 🔨 Stage 1: Build (heavy image with Maven)
-FROM maven:3-jdk-11 AS build
-COPY pom.xml .
-RUN mvn dependency:resolve
-COPY src/ src/
-RUN mvn package
-
-# 🚀 Stage 2: Runtime (lightweight JRE only)
-FROM openjdk:11-jre
-COPY --from=build /target/shipping.jar /opt/shipping/
-CMD ["java", "-jar", "/opt/shipping/shipping.jar"]
-```
-
-> 💡 **Multi-stage builds** drastically reduce final image size — the Maven build tools stay in Stage 1 and never reach production.
-
-### 📊 Dependency File Cheatsheet
-
-| Language | Dependency File    | Install Command                   |
-| -------- | ------------------ | --------------------------------- |
-| Node.js  | `package.json`     | `npm install`                     |
-| Python   | `requirements.txt` | `pip install -r requirements.txt` |
-| Go       | `go.mod`           | `go mod download`                 |
-| Java     | `pom.xml`          | `mvn package`                     |
-| Rust     | `Cargo.toml`       | `cargo build`                     |
-
----
-
-## 🛠️ Troubleshooting
-
-| ⚠️ Symptom                          | 🔍 Likely Cause                      | ✅ Fix                                                  |
-| ----------------------------------- | ------------------------------------ | ------------------------------------------------------- |
-| Pods stuck in `Pending`             | PVC not bound / no storage class     | Check `kubectl get pvc -n robot-shop` and storage class |
-| `ImagePullBackOff`                  | Wrong image name or private registry | Verify image tags in `values.yaml`                      |
-| Ingress `ADDRESS` stays empty       | AGIC still provisioning              | Wait 5–10 min; delete and recreate the ingress pod      |
-| AKS creation quota error            | Regional resource limits             | Switch to a different Azure region                      |
-| `failed to list` error in AGIC logs | Intermittent AGIC issue              | Delete the AGIC pod and let it restart                  |
-| App loads but ratings missing       | Redis PVC not bound                  | Check `kubectl describe pod redis-0 -n robot-shop`      |
-| Cannot connect with `kubectl`       | Wrong context                        | Run `kubectl config current-context` to verify          |
-
----
-
-## 🔗 Resources
-
-- 🤖 [Instana Robot Shop (original)](https://github.com/instana/robot-shop)
-- ☸️ [AKS Documentation](https://learn.microsoft.com/en-us/azure/aks/)
-- ⛵ [Helm Documentation](https://helm.sh/docs/)
-- 🌐 [Azure Application Gateway Ingress Controller](https://learn.microsoft.com/en-us/azure/application-gateway/ingress-controller-overview)
-- 💾 [AKS Storage Classes](https://learn.microsoft.com/en-us/azure/aks/concepts-storage)
-- 🐳 [Docker Multi-stage Builds](https://docs.docker.com/build/building/multi-stage/)
-
----
-
-> 💬 _Deployed successfully? Try extending it — add TLS to the Ingress, set resource limits per pod, or wire up a real payment gateway!_
-> ⭐ _Found this useful? Star the repo!_
